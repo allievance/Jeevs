@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+
+# Greeting
+
+echo "At your service."
+
+# Suppress stderr
+
+exec 2>/dev/null
+
+# Input
+
+while true; do
+	read -p "jeevs>" input
+
+# Escape hatches
+
+if [[ "$input" == "!bash" ]]; then
+	echo "Goodbye."
+	exec /bin/bash
+fi
+
+if [[ "$input" == "!exit" ]]; then
+	echo "Goodbye."
+	exit 0
+fi
+
+if [[ "$input" == "exit" ]]; then
+	echo "Goodbye."
+	break
+fi
+
+# cd (builtin)
+
+if [[ "$input" == cd* ]]; then
+	target="${input#cd }"
+
+	if [[ -z "$target" || "$target" == "cd" ]]; then
+		cd ~ || echo "I'm sorry. I cannot change directories."
+	else
+		cd "$target" || echo "I'm sorry. There is no such directory."
+	fi
+
+continue
+fi
+
+	bash -c "$input"
+done

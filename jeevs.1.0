@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+
+echo "At your service."
+
+while true; do
+	read -p "jeevs>" input
+
+# Handle exit
+
+if [[ "$input" == "!bash" ]]; then
+		exec /bin/bash
+fi
+
+if [[ "$input" == "!exit" ]]; then
+	exit 0
+fi
+
+if [[ "$input" == "exit" ]]; then
+	echo "Goodbye."
+	break
+fi
+
+# Handle cd (builtin)
+
+if [[ "$input" == cd* ]]; then
+	target="${input#cd }"
+	continue
+fi
+
+	bash -c "$input"
+done

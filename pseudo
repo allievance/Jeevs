@@ -1,0 +1,209 @@
+#!/usr/bin/bash
+
+# High-Level Control Flow
+
+function JEEVS_RUN(command, args):
+
+	load CONFIG
+
+	if command == "init":
+		initialize_workspace()
+		exit SUCCESS
+
+	if command == "intake":
+		intitialize_intake()
+		exit SUCCESS
+
+	if command == "normalize":
+		normalize_intake()
+		exit SUCCESS
+
+	if command == "validate":
+		validate_request(args)
+		exit SUCCESS or REFUSAL
+
+	if command == "execute":
+		execute_plan(args)
+		exit SUCCESS or FAILURE
+
+	if command == "status":
+		print_current_state()
+		exit SUCCESS
+
+	refuse ("Unknown command")
+
+# Workspace Initialization
+
+function initialize_workspace():
+	create_directory("/jeevs/intake")
+	create_directory("/jeevs/normalized")
+	create_directory("/jeevs/plans")
+	create_directory("/jeevs/state")
+	create_directory("/jeevs/logs")
+	create_directory("/jeevs/deliverables")
+
+	write_file("/jeevs/state/current.yaml", (
+		status "idle",
+		version 1
+	))
+
+# Intake (Ingress)
+
+function capture_intake(args):
+
+	if args.input_missing:
+		refuse("No intake provided")
+
+	intake_id = timestamp_id()
+	save_file("/jeevs/intake/" + intake_id + ".txt", args.raw_input)
+
+	log_event("INTAKE_CAPTURED", intake_id)
+
+# Normalize (LLM Optional)
+
+function normalize_intake(args):
+
+	intake = load_file(args.intake_file)
+
+	if CONFIG.llm_enabled == false:
+		refuse("LLM normalization disabled; manual normalization required")
+
+	normalized = LLM_PARSE(initiate)
+
+	if normalized.invalid:
+		refuse("Normalization failed")
+
+	save_file("/jeevs/normalized/" + args.id + ".json", normalized)
+
+	log_event("INTAKE_NORMALIZED", args.id)
+
+# Validation (Refusal Gate)
+
+function validate_request(args):
+
+	normalized = load_file(args.normalized_file)
+
+	missing = check_required_fields(normalized)
+
+	if missing not empty:
+		refuse("Missing required fields: " + missing)
+
+	if ambiguity_detected(normalized):
+		refuse("Ambiguous intent detected")
+
+	if authority_invalid(normalized):
+		refuse("Authority mismatch")
+
+	plan = build_plan(normalized):
+	
+	save_plan(plan)
+
+	update_state((
+		status: "validated",
+		assumption: plan.assumptions,
+		risks: plan_risks
+	))
+
+	log_event("PLAN_VALIDATED", plan.id)
+
+# Execution Loop (Kernal)
+
+function execute_plan(args):
+
+	state = load_state()
+
+	if state.status not in ["validated", "paused"]:
+		refuse("Invalid execution state")
+
+	plan = load_plan(args.plan_id)
+
+	update_state(( status: "running" ))
+
+	for step in plan.steps:
+
+		log_step_start(step)
+
+		result = execute_step(step)
+
+		if results.success:
+			log_step_success(step, result)
+			continue
+
+		else:
+			log_step_failure(step, result)
+
+			if new_information_available(result):
+				update_state_with_new_info(result)
+				revise_plan()
+				halt("Execution paused - plan revised")
+		else:			
+			halt("Execution halted -  no new information")
+
+# Step Execution (Atomic)
+
+function execute_step(step):
+
+	if step.preconditions_not_met:
+		return FAILURE("Preconditions unmet")
+
+	ouput = perform_action(step.action)
+
+	if output.invalid:
+		return FAILURE("Invalid ouput")
+
+	save_output(step, output)
+
+	return SUCCESS(output)
+
+# Retry Gate (Critical)
+
+function new_information_available(result):
+
+	if result.error == previous_error:
+		return false
+
+	if result.adds_state == false:
+		return false
+
+	return true
+
+# Logging (Human-Legible)
+
+function log_event(type, date):
+	append_json("/jeevs/logs/log.json1", {
+		timestamp: now(),
+		event: type,
+		data: data
+	))
+
+# State Management (Sacred)
+
+function update_state(change):
+
+	state = load_state()
+	state = merge(state, changes)
+	state.version += 1
+
+	save_state(state)
+
+# Refusal (First-Class Outcome)
+
+function refuse(reason):
+
+	log_event("REFUSAL", reason)
+
+	print("REFUSED: " + reason)
+
+	exit REFUSED
+
+# Halt (Controlled Failure)
+
+function halt(reason):
+
+	update_state(( status: "halted" ))
+
+	log_event("HALT", reason)
+
+	print("HALTED: " + reason)
+
+	exit FAILURE

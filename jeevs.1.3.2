@@ -1,0 +1,95 @@
+#!/usr/bin/env bash
+
+# ========================================
+# JEEVS 1.3.2 - dialogic shell OS layer
+# ========================================
+
+echo "At your service."
+
+exec 2>/dev/null
+
+# ========================================
+# FUNCTIONS
+# ========================================
+
+# Detect raw shell commands
+# ----------------------------------------
+
+jeevs_is_shell() {
+	local input="$1"
+
+	# Starts with common shell patterns
+	# ---------------------------------
+	[[ "$input"=~^[a-zA-Z0-9_/.-]+ ]] && return 0
+
+	return 1
+}
+
+# Builtin / dialogic interpreter
+# ----------------------------------------
+
+jeevs_interpret() {
+	local phrase="$1"
+
+	case "$phrase" in
+		*where\ am\ i* ) pwd ;;
+		*what\ failed* ) echo "Last command failed, reason unknown." ;;
+		*help* ) echo "I can execute commands or respond to natural language." ;;
+		* ) echo "I do not understand '$phrase'" ;;
+	esac
+}
+
+# =========================================
+# MAIN LOOP
+# =========================================
+
+# Input
+# -----------------------------------------
+
+while true; do
+	read -p "jeevs>" input || continue
+
+# Skim empty input
+# -----------------------------------------
+
+[[ -z "$input" ]] && continue
+
+# -----------------------------------------
+# ESCAPE HATCH
+# -----------------------------------------
+
+if [[ "$input" == "exit" ]]; then
+	echo "Goodbye."
+	exit 0
+fi
+
+# =========================================
+# BUILTINS
+# =========================================
+
+if [[ "$input" == cd* ]]; then
+	target="${input#cd }"
+
+	if [[ -z "$target" || "$target" == "cd" ]]; then
+		cd ~ || echo "I'm sorry. I cannot change directories."
+	else
+		cd "$target" || echo "I'm sorry. There is no such directory."
+	fi
+
+continue
+fi
+
+# ==========================================
+# ROUTING
+# ==========================================
+
+if jeevs_is_shell "$input"; then
+	# Raw shell commands: execut, suppress raw stderr
+	# -----------------------------------------------
+	bash -c "$input" 2>/dev/null
+else
+	# Natural language: pass to interpreter
+	# -----------------------------------------------
+	jeevs_interpret "$input"
+fi
+done
